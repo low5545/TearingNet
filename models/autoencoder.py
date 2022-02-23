@@ -13,7 +13,11 @@ import sys
 import os
 
 # neural atlas
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(BASE_DIR, '..'))
+
 import pytorch3d.ops
+from neural_atlas.models import encoders
 
 USE_CUDA = True
 
@@ -27,8 +31,12 @@ class PointCloudAutoencoder(nn.Module):
     def __init__(self, opt):
         super(PointCloudAutoencoder, self).__init__()
         
-        encoder_class = get_model_class(opt.encoder)
-        self.encoder = encoder_class(opt)
+        if not opt.svr:
+            encoder_class = get_model_class(opt.encoder)
+            self.encoder = encoder_class(opt)
+        else:
+            self.encoder = encoders.ResNet18(latent_dims=512, pretrained=False)
+
         decoder_class = get_model_class(opt.decoder)
         self.decoder = decoder_class(opt)
         self.is_train = (opt.phase.lower() == 'train')

@@ -30,18 +30,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def main():
-    # Build up an autoencoder
-    t = time.time()
-    print(torch.cuda.device_count(), "GPUs will be used for training.")
-    device = torch.device("cuda:0")
-    ae = PointCloudAutoencoder(opt)
-    ae = torch.nn.DataParallel(ae)
-    ae.to(device)
-
-    # Create folder to save trained models
-    if not os.path.exists(opt.exp_name):
-        os.makedirs(opt.exp_name)
-
     # load the neural atlas config from the config file
     with open(opt.neat_config) as f:
         neat_config = easydict.EasyDict(yaml.full_load(f))
@@ -64,6 +52,19 @@ def main():
     )
     datamodule.setup(stage="fit")
     train_dataloader = datamodule.train_dataloader()['dataset']
+    opt.svr = ("img" in neat_config.input)
+
+    # Build up an autoencoder
+    t = time.time()
+    print(torch.cuda.device_count(), "GPUs will be used for training.")
+    device = torch.device("cuda:0")
+    ae = PointCloudAutoencoder(opt)
+    ae = torch.nn.DataParallel(ae)
+    ae.to(device)
+
+    # Create folder to save trained models
+    if not os.path.exists(opt.exp_name):
+        os.makedirs(opt.exp_name)
 
     # Create a tensorboard writer
     if opt.tf_summary: writer = SummaryWriter(log_dir=opt.exp_name)
@@ -76,7 +77,16 @@ def main():
     # Load a check point if given
     if opt.checkpoint != '':
         checkpoint = torch.load(opt.checkpoint)
-        ae.module.load_state_dict(checkpoint['model_state_dict'])
+        if not opt.svr:
+            ae.module.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model_dict = ae.module.state_dict() # load parameters from pre-trained FoldingNet
+            for k in checkpoint['model_state_dict']:
+                if k in model_dict and "encoder" not in k:
+                    model_dict[k] = checkpoint['model_state_dict'][k]
+                    print("    Found weight: " + k)
+            ae.module.load_state_dict(model_dict)
+            print("Existing model %s (partly) loaded.\n" % (opt.checkpoint))
         if opt.load_weight_only == False:
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -93,19 +103,27 @@ def main():
         batch_id = 0
         not_end_yet = True
         it = iter(train_dataloader)
-        len_train = len(train_dataloader)
+        if not opt.svr:
+            len_train = len(train_dataloader)
+        else:
+            len_train = len(train_dataloader) // 24
 
         # Iterates the training process
         while not_end_yet == True:
             batch = easydict.EasyDict(next(it))
-            batch.input.pcl = batch.input.pcl.cuda()
+            if not opt.svr:
+                batch.input.pcl = batch.input.pcl.cuda()
+                input = batch.input.pcl
+            else:
+                batch.input.img = batch.input.img.cuda()
+                input = batch.input.img
             batch.target.pcl = batch.target.pcl.cuda()
 
             not_end_yet = batch_id + 1 < len_train
             optimizer.zero_grad()
 
             # Forward and backward computation
-            rec = ae(batch.input.pcl)
+            rec = ae(input)
             rec = rec["rec"]
             train_loss = ae.module.xyz_loss(batch.target.pcl, rec)
             train_loss.backward()
