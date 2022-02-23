@@ -12,10 +12,9 @@ import numpy as np
 import sys
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(BASE_DIR, '../util/nndistance'))
-from modules.nnd import NNDModule
-nn_match = NNDModule()
+# neural atlas
+import pytorch3d.ops
+
 USE_CUDA = True
 
 from . import get_model_class
@@ -54,7 +53,11 @@ class PointCloudAutoencoder(nn.Module):
 
         if xyz_loss_type == -1:
             xyz_loss_type = self.xyz_loss_type
-        dist1, dist2 = nn_match(data.contiguous(), rec.contiguous())
+        dist1, _, _ = pytorch3d.ops.knn_points(data, rec, K=1)                  # (N, P1, 1)
+        dist1 = dist1.squeeze(dim=2)                                            # (N, P1)
+        dist2, _, _ = pytorch3d.ops.knn_points(rec, data, K=1)                  # (N, P2, 1)
+        dist2 = dist2.squeeze(dim=2)                                            # (N, P2)
+
         dist2 = dist2 * self.xyz_chamfer_weight
 
         # Different variants of the Chamfer distance
