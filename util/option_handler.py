@@ -20,6 +20,9 @@ def str2bool(v):
 class BasicOptionHandler():
 
     def add_options(self, parser):
+        parser.add_argument(
+            "--neat_config", type=str, help='Path to the neural atlas config file.'
+        )
         parser.add_argument('--exp_name', type=str, default='experiment_name', help='Name of the experiment, folders are created by this name.')
         parser.add_argument('--phase', type=str, default='train', help='Indicate current phase, train or test')
         parser.add_argument('--encoder', type=str, default='pointnetvanilla', help='Choice of the encoder.')

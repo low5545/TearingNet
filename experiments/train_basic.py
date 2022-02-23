@@ -4,9 +4,6 @@
 Basic training script
 '''
 
-import multiprocessing
-multiprocessing.set_start_method('spawn', True)
-
 import torch
 import torch.nn.parallel
 import torch.optim as optim
@@ -17,10 +14,16 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(BASE_DIR, '..'))
 
+# neural atlas
+import yaml
+import easydict
+import pytorch_lightning as pl
+import neural_atlas as neat
+
 from dataloaders import point_cloud_dataset_train, gen_rotation_matrix
 from models.autoencoder import PointCloudAutoencoder
 from util.option_handler import TrainOptionHandler
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import time
 
 import warnings
@@ -39,11 +42,31 @@ def main():
     if not os.path.exists(opt.exp_name):
         os.makedirs(opt.exp_name)
 
-    # Take care of the dataset
-    _, train_dataloader, _, _ = point_cloud_dataset_train(opt.dataset_name, opt.num_points, opt.batch_size, opt.train_split)
+    # load the neural atlas config from the config file
+    with open(opt.neat_config) as f:
+        neat_config = easydict.EasyDict(yaml.full_load(f))
+
+    # set configs from the neural atlas config
+    assert neat_config.data.train_eff_batch_size \
+           == neat_config.data.val_eff_batch_size
+
+    # seed all pseudo-random generators
+    neat_config.seed = pl.seed_everything(neat_config.seed, workers=True)
+
+    # instantiate the neural atlas data module
+    datamodule = neat.data.datamodule.DataModule(
+        neat_config.seed,
+        neat_config.input,
+        neat_config.target,
+        num_nodes=1,
+        gpus=[ 0 ],
+        **neat_config.data
+    )
+    datamodule.setup(stage="fit")
+    train_dataloader = datamodule.train_dataloader()['dataset']
 
     # Create a tensorboard writer
-    if opt.tf_summary: writer = SummaryWriter(comment=str.replace(opt.exp_name,'/','_'))
+    if opt.tf_summary: writer = SummaryWriter(log_dir=opt.exp_name)
 
     # Setup the optimizer and the scheduler
     lr = opt.lr
@@ -74,29 +97,17 @@ def main():
 
         # Iterates the training process
         while not_end_yet == True:
-            points, _ = next(it)
-            not_end_yet = batch_id + 1 < len_train
-            if(points.size(0) < opt.batch_size):
-                break
+            batch = easydict.EasyDict(next(it))
+            batch.input.pcl = batch.input.pcl.cuda()
+            batch.target.pcl = batch.target.pcl.cuda()
 
-            # Data augmentation
-            points = points.cuda()
-            if opt.augmentation == True:
-                if opt.augmentation_theta != 0 or opt.augmentation_rotation_axis != 0: # rotation augmentation
-                    rotation_matrix = gen_rotation_matrix(theta=opt.augmentation_theta, 
-                        rotation_axis=opt.augmentation_rotation_axis).unsqueeze(0).cuda().expand(opt.batch_size, -1 , -1)
-                    points = torch.bmm(points, rotation_matrix)
-                if opt.augmentation_max_scale - opt.augmentation_min_scale > 1e-3: # scaling augmentation
-                    noise_scale = np.random.uniform(opt.augmentation_min_scale, opt.augmentation_max_scale)
-                    points *= noise_scale
-                if (opt.augmentation_flip_axis >= 0) and (np.random.rand() < 0.5): # fliping augmentation
-                    points[:,:,opt.augmentation_flip_axis] *= -1
+            not_end_yet = batch_id + 1 < len_train
             optimizer.zero_grad()
 
             # Forward and backward computation
-            rec = ae(points)
+            rec = ae(batch.input.pcl)
             rec = rec["rec"]
-            train_loss = ae.module.xyz_loss(points, rec)
+            train_loss = ae.module.xyz_loss(batch.target.pcl, rec)
             train_loss.backward()
             optimizer.step()
 
@@ -109,9 +120,9 @@ def main():
                 if opt.tf_summary: writer.add_scalar('train/batch_train_loss', train_loss.item(), n_iter)
 
             if opt.pc_write_freq > 0 and batch_id % opt.pc_write_freq == 0:
-                labels = np.concatenate((np.ones(rec.shape[1]), np.zeros(points.shape[1])), axis=0).tolist()
+                labels = np.concatenate((np.ones(rec.shape[1]), np.zeros(batch.target.pcl.shape[1])), axis=0).tolist()
                 if opt.tf_summary:
-                    writer.add_embedding(torch.cat((rec[0, 0:, 0:3], points[0, :, 0:3]), 0), 
+                    writer.add_embedding(torch.cat((rec[0, 0:, 0:3], batch.target.pcl[0, :, 0:3]), 0), 
                         global_step=n_iter, metadata=labels, tag="pc")
 
             n_iter = n_iter + 1
