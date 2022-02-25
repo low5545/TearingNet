@@ -1,0 +1,20 @@
+# Reconstruction experiment
+
+NEAT_CONFIG="${HOME_DIR}/neural_atlas/surfrec.yaml"
+EXP="rec_tearing_shapenet"
+PY_NAME="${HOME_DIR}/experiments/reconstruction.py"
+EXP_NAME="logs/exp/test/surfrec/tearingnet/${EXP}"
+CHECKPOINT="${HOME_DIR}/logs/exp/train/surfrec/tearingnet/train_tearing_shapenet/epoch_109.pth"
+PHASE="test"
+CONFIG_FROM_CHECKPOINT="True"
+GRID_DIMS="159 159"
+PRINT_FREQ="5"
+PC_WRITE_FREQ="-1"
+GT_COLOR="0.2 0.2 0.2"
+GRAPH_THRES="0"
+GRAPH_EDGE_COLOR="0.6 0.6 0.6"
+WRITE_MESH="True"
+GRAPH_DELETE_POINT_MODE="0"
+GRAPH_DELETE_POINT_EPS="0.02"
+
+RUN_ARGUMENTS="${PY_NAME} --exp_name ${EXP_NAME} --checkpoint ${CHECKPOINT} --phase ${PHASE} --config_from_checkpoint ${CONFIG_FROM_CHECKPOINT}  --grid_dims ${GRID_DIMS} --print_freq ${PRINT_FREQ} --pc_write_freq ${PC_WRITE_FREQ} --gt_color ${GT_COLOR} --graph_thres ${GRAPH_THRES} --graph_edge_color ${GRAPH_EDGE_COLOR} --write_mesh ${WRITE_MESH} --graph_delete_point_mode ${GRAPH_DELETE_POINT_MODE} --graph_delete_point_eps ${GRAPH_DELETE_POINT_EPS}"

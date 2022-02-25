@@ -4,7 +4,7 @@ import torch
 import pytorch3d.structures
 import pytorch3d.ops
 import pytorch3d.renderer
-from . import loss
+from . import loss, extract_encoded_pcl_mesh
 
 
 class Metric(torch.nn.Module):
@@ -49,7 +49,8 @@ class Metric(torch.nn.Module):
         f_score_dist_threshold,
         distortion_eps,
         degen_chart_area_ratio,
-        overlap_dist_threshold
+        overlap_dist_threshold,
+        opt
     ):
         super().__init__()
         assert isinstance(default_chamfer_dist, (int, float))
@@ -70,6 +71,7 @@ class Metric(torch.nn.Module):
         self.distortion_eps = distortion_eps
         self.degen_chart_area_ratio = degen_chart_area_ratio
         self.overlap_squared_dist_threshold = overlap_dist_threshold ** 2
+        self.opt = opt
         self.register_buffer(
             "default_chamfer_dist",
             torch.tensor(default_chamfer_dist)
@@ -126,7 +128,7 @@ class Metric(torch.nn.Module):
 
     def compute(
         self,
-        sample_is_occupied,                                                     # (num_charts, sample.chart_uv_sample_size)
+        sample_graph_wght,                                                      # (sample.chart_uv_sample_size_sqrt, sample.chart_uv_sample_size_sqrt, 4)
         mapped_pcl,                                                             # (num_charts, sample.chart_uv_sample_size, 3)
         sample_dataset_target_pcl,                                              # (eval_target_pcl_nml_size, 3)
         sample_mapped_tangent_vectors,                                          # (num_charts, sample.chart_uv_sample_size, 2, 3)
@@ -136,8 +138,15 @@ class Metric(torch.nn.Module):
 
         # extract the mesh associated to the encoded surface, along with the
         # vertices of the non-encoded surface
-        sample_encoded_mesh, sample_mapped_mesh, sample_encoded_chart_meshes \
-        = self.extract_encoded_mapped_mesh(sample_is_occupied, mapped_pcl)
+        grid_dims = int(math.sqrt(mapped_pcl.shape[1]))
+
+        sample_encoded_mesh, sample_mapped_mesh, sample_encoded_chart_meshes, \
+        sample_is_occupied = extract_encoded_pcl_mesh.extract_encoded_pcl_mesh(
+            points=mapped_pcl.view(grid_dims, grid_dims, 3),
+            thres=self.opt.graph_thres,
+            delete_point_mode=self.opt.graph_delete_point_mode,
+            weights=sample_graph_wght
+        )
 
         # compute the chamfer distance & normal consistency of the encoded mesh
         # wrt. the target point cloud & surface normals

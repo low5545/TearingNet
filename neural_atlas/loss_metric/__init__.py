@@ -1,1 +1,1 @@
-from . import loss, metric
+from . import loss, metric, test
