@@ -17,4 +17,4 @@ WRITE_MESH="True"
 GRAPH_DELETE_POINT_MODE="0"
 GRAPH_DELETE_POINT_EPS="0.02"
 
-RUN_ARGUMENTS="${PY_NAME} --exp_name ${EXP_NAME} --checkpoint ${CHECKPOINT} --phase ${PHASE} --config_from_checkpoint ${CONFIG_FROM_CHECKPOINT}  --grid_dims ${GRID_DIMS} --print_freq ${PRINT_FREQ} --pc_write_freq ${PC_WRITE_FREQ} --gt_color ${GT_COLOR} --graph_thres ${GRAPH_THRES} --graph_edge_color ${GRAPH_EDGE_COLOR} --write_mesh ${WRITE_MESH} --graph_delete_point_mode ${GRAPH_DELETE_POINT_MODE} --graph_delete_point_eps ${GRAPH_DELETE_POINT_EPS}"
+RUN_ARGUMENTS="${PY_NAME} --neat_config ${NEAT_CONFIG} --exp_name ${EXP_NAME} --checkpoint ${CHECKPOINT} --phase ${PHASE} --config_from_checkpoint ${CONFIG_FROM_CHECKPOINT}  --grid_dims ${GRID_DIMS} --print_freq ${PRINT_FREQ} --pc_write_freq ${PC_WRITE_FREQ} --gt_color ${GT_COLOR} --graph_thres ${GRAPH_THRES} --graph_edge_color ${GRAPH_EDGE_COLOR} --write_mesh ${WRITE_MESH} --graph_delete_point_mode ${GRAPH_DELETE_POINT_MODE} --graph_delete_point_eps ${GRAPH_DELETE_POINT_EPS}"
